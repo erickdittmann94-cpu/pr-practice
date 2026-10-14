@@ -5,6 +5,7 @@ Aufruf: python3 render_hellprinting.py <plates_dir> <audio_src.mp4> <format y|v>
 plates_dir enthaelt textfreie Hintergruende: {y,v}_{A,B,C}_clean.png und {y,v}_E_min.png
 (Szene "Ich bin Erick", wird per Helligkeits-Fit aus A abgeleitet).
 """
+import os
 import subprocess
 import sys
 
@@ -23,22 +24,24 @@ WHITE = (255, 255, 255)
 if FMT == "y":
     W, H = 1920, 1080
     CX, MAXW = W // 2, 1700
-    HEAD, SUB, LABEL, TAG, BTN, KICK = 112, 58, 36, 32, 78, 40
+    HEAD, SUB, LABEL, TAG, BTN, KICK = 140, 58, 36, 32, 96, 40
     HEAD_Y = 140
     LABEL_POS, TAG_POS = (110, 56), (110, 1000)
     SCRIM_H = 0.62
 else:
     W, H = 1080, 1920
     CX, MAXW = 510, 880  # optisch in die Safe Zone (rechte Reels-/Shorts-Buttons)
-    HEAD, SUB, LABEL, TAG, BTN, KICK = 112, 62, 34, 30, 66, 40
+    HEAD, SUB, LABEL, TAG, BTN, KICK = 140, 62, 34, 30, 80, 40
     HEAD_Y = 300
     LABEL_POS, TAG_POS = (70, 225), (70, 1420)
     SCRIM_H = 0.52
 
 
 def font(name, size):
-    path = {"Black": "DejaVuSans-Bold.ttf", "Bold": "DejaVuSans-Bold.ttf", "SemiBold": "DejaVuSans-Bold.ttf",
-            "Medium": "DejaVuSans.ttf"}[name]
+    if name == "Black":  # Markenschrift Metal Mania (OFL) fuer Ueberschriften und CTA
+        return ImageFont.truetype(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts",
+                                               "MetalMania-Regular.ttf"), size)
+    path = {"Bold": "DejaVuSans-Bold.ttf", "SemiBold": "DejaVuSans-Bold.ttf", "Medium": "DejaVuSans.ttf"}[name]
     return ImageFont.truetype(f"/usr/share/fonts/truetype/dejavu/{path}", size)
 
 
@@ -79,6 +82,11 @@ plates = {
 
 
 # ---------------------------------------------------------------- Text-Elemente
+def lh(f):
+    """Zeilenhoehe: Metal Mania hat kleine Oberlaengen, braucht weniger Abstand."""
+    return int(f.size * (1.02 if "MetalMania" in f.path else 1.2))
+
+
 def text_layer(lines, anchor_y, align="center", ax=None, tracking=0, shadow=True):
     """lines: [(text, font, color)] -> (x, y, rgba) mit weichem Schatten."""
     ax = CX if ax is None else ax
@@ -98,7 +106,7 @@ def text_layer(lines, anchor_y, align="center", ax=None, tracking=0, shadow=True
                 x += d.textlength(ch, font=f) + tracking
         else:
             d.text((x, y), text, font=f, fill=color)
-        y += int(f.size * 1.2)
+        y += lh(f)
     arr = np.array(tmp)
     ys, xs = np.where(arr[..., 3] > 0)
     x0, x1 = max(xs.min() - pad, 0), min(xs.max() + pad, W)
@@ -148,7 +156,7 @@ def stack(blocks, y0, gap=26):
     for lines, name, cap, color in blocks:
         f = fit(lines, name, cap)
         out.append(text_layer([(t, f, color) for t in lines], y))
-        y += int(f.size * 1.2) * len(lines) + gap
+        y += lh(f) * len(lines) + gap
     return out
 
 
