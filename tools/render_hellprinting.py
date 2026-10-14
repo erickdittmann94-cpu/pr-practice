@@ -22,22 +22,34 @@ WHITE = (255, 255, 255)
 
 if FMT == "y":
     W, H = 1920, 1080
-    CX = W // 2
-    HEAD, SUB, LABEL, TAG, BTN = 92, 44, 30, 28, 64
-    HEAD_Y = 150
-    LABEL_POS, TAG_POS = (110, 62), (110, 1000)
+    CX, MAXW = W // 2, 1700
+    HEAD, SUB, LABEL, TAG, BTN, KICK = 112, 58, 36, 32, 78, 40
+    HEAD_Y = 140
+    LABEL_POS, TAG_POS = (110, 56), (110, 1000)
     SCRIM_H = 0.62
 else:
     W, H = 1080, 1920
-    CX = 510  # optisch in die Safe Zone (rechte Reels-/Shorts-Buttons)
-    HEAD, SUB, LABEL, TAG, BTN = 88, 42, 30, 28, 60
-    HEAD_Y = 390
-    LABEL_POS, TAG_POS = (70, 290), (70, 1420)
-    SCRIM_H = 0.50
+    CX, MAXW = 510, 880  # optisch in die Safe Zone (rechte Reels-/Shorts-Buttons)
+    HEAD, SUB, LABEL, TAG, BTN, KICK = 112, 62, 34, 30, 66, 40
+    HEAD_Y = 300
+    LABEL_POS, TAG_POS = (70, 225), (70, 1420)
+    SCRIM_H = 0.52
 
 
 def font(name, size):
-    return ImageFont.truetype(f"{FONT_DIR}Inter-{name}.otf", size)
+    path = {"Black": "DejaVuSans-Bold.ttf", "Bold": "DejaVuSans-Bold.ttf", "SemiBold": "DejaVuSans-Bold.ttf",
+            "Medium": "DejaVuSans.ttf"}[name]
+    return ImageFont.truetype(f"/usr/share/fonts/truetype/dejavu/{path}", size)
+
+
+def fit(lines, name, cap, maxw=None, floor=30):
+    """Groesste Schrift <= cap, bei der alle Zeilen in maxw passen."""
+    maxw = maxw or MAXW
+    d = ImageDraw.Draw(Image.new("L", (1, 1)))
+    size = cap
+    while size > floor and max(d.textlength(t, font=font(name, size)) for t in lines) > maxw:
+        size -= 2
+    return font(name, size)
 
 
 # ---------------------------------------------------------------- Hintergruende
@@ -130,51 +142,47 @@ def rounded_button(text, f, cy):
     return xa, ya, out[ya:yb, xa:xb], (x0 + bw / 2 - xa, y0 + bh / 2 - ya)
 
 
-fH, fS, fSb = font("Black", HEAD), font("Medium", SUB), font("SemiBold", SUB)
-fK = font("Bold", 34)
-SUBY = HEAD_Y + (int(HEAD * 1.2) * 2 + 18 if FMT == "v" else int(HEAD * 1.2) + 14)
+def stack(blocks, y0, gap=26):
+    """blocks: [(lines, fontname, cap, color)] -> Layer-Liste, vertikal gestapelt."""
+    out, y = [], y0
+    for lines, name, cap, color in blocks:
+        f = fit(lines, name, cap)
+        out.append(text_layer([(t, f, color) for t in lines], y))
+        y += int(f.size * 1.2) * len(lines) + gap
+    return out
 
 
-def head(lines, y=HEAD_Y):
-    return text_layer([(t, fH, WHITE) for t in lines], y)
-
-
-def sub(lines, y=None, color=CREAM, f=None):
-    return text_layer([(t, f or fS, color) for t in lines], y or SUBY)
-
-
-def two_line_head(a, b):  # Hochkant: mehrzeilig; Querformat: eine Zeile
-    return head([a, b]) if FMT == "v" else head([f"{a} {b}"])
-
-
-# Szenen: (Plate, Zoom-Richtung, [Elemente], Scrim-Variante)
+V = FMT == "v"
 S = []
-S.append(("A", [two_line_head("DEINE IDEE.", "IN FORM GEBRACHT."),
-                sub(["3D-DRUCKSERVICE · EINZELSTÜCKE · KLEINSERIEN"] if FMT == "y"
-                    else ["3D-DRUCKSERVICE", "EINZELSTÜCKE · KLEINSERIEN"])], "top"))
-S.append(("B", [head(["FUNKTIONSTEILE"]),
-                sub(["HALTER · CLIPS · ERSATZTEILE", "PROTOTYPEN & KLEINSERIEN"],
-                    HEAD_Y + int(HEAD * 1.2) + 14)], "top"))
-S.append(("A", [head(["3D-DRUCK"]),
-                sub(["Einzelstücke und Kleinserien", "passend zu deinem Vorhaben"],
-                    HEAD_Y + int(HEAD * 1.2) + 14)], "top"))
-S.append(("C", [head(["LASERGRAVUR"]),
-                sub(["Individuelle Gravuren mit Charakter"], HEAD_Y + int(HEAD * 1.2) + 14)], "top"))
-S.append(("B", [two_line_head("DAS PASSENDE", "MATERIAL"),
-                sub(["PLA · PETG · PETG-CF/GF", "PA-CF/GF · ABS · ASA · TPU"])], "top"))
-S.append(("B", [two_line_head("DU HAST SCHON", "EINE DATEI?"),
-                sub(["STL · STEP · 3MF · OBJ · DXF · PDF · BILD"] if FMT == "y"
-                    else ["STL · STEP · 3MF · OBJ", "DXF · PDF · BILD"]),
-                sub(["Technische Dateiprüfung: 10 €", "Bei Druckauftrag vollständig angerechnet"],
-                    SUBY + (int(SUB * 1.2) * (1 if FMT == "y" else 2) + 26), RED if False else WHITE,
-                    fSb)], "top"))
-btn_y = 835 if FMT == "y" else 1290
-kick = text_layer([("JETZT ONLINE ANFRAGEN", fK, CREAM)], btn_y - 78, tracking=5)
-button = rounded_button("3d-hellprinting.de", font("Black", BTN), btn_y)
-S.append(("E", [head(["ICH BIN ERICK."]),
-                sub(["Du sprichst direkt mit mir.", "Von der Anfrage bis zum fertigen Teil."],
-                    HEAD_Y + int(HEAD * 1.2) + 14),
-                kick, button], "both"))
+S.append(("A", stack([(["DEINE IDEE.", "IN FORM", "GEBRACHT."] if V else ["DEINE IDEE.", "IN FORM GEBRACHT."], "Black", HEAD, WHITE),
+                      (["3D-DRUCKSERVICE", "EINZELSTÜCKE", "KLEINSERIEN"] if V else
+                       ["3D-DRUCKSERVICE · EINZELSTÜCKE · KLEINSERIEN"], "Medium", SUB, CREAM)], HEAD_Y), "top"))
+S.append(("B", stack([(["FUNKTIONS-", "TEILE"] if V else ["FUNKTIONSTEILE"], "Black", HEAD, WHITE),
+                      (["HALTER · CLIPS", "ERSATZTEILE", "PROTOTYPEN &", "KLEINSERIEN"] if V else
+                       ["HALTER · CLIPS · ERSATZTEILE", "PROTOTYPEN & KLEINSERIEN"], "Medium", SUB, CREAM)], HEAD_Y), "top"))
+S.append(("A", stack([(["3D-DRUCK"], "Black", HEAD, WHITE),
+                      (["Einzelstücke und", "Kleinserien passend", "zu deinem Vorhaben"] if V else
+                       ["Einzelstücke und Kleinserien", "passend zu deinem Vorhaben"], "Medium", SUB, CREAM)], HEAD_Y), "top"))
+S.append(("C", stack([(["LASERGRAVUR"], "Black", HEAD, WHITE),
+                      (["Individuelle Gravuren", "mit Charakter"] if V else
+                       ["Individuelle Gravuren mit Charakter"], "Medium", SUB, CREAM)], HEAD_Y), "top"))
+S.append(("B", stack([(["DAS PASSENDE", "MATERIAL"] if V else ["DAS PASSENDE MATERIAL"], "Black", HEAD, WHITE),
+                      (["PLA · PETG", "PETG-CF/GF · PA-CF/GF", "ABS · ASA · TPU"] if V else
+                       ["PLA · PETG · PETG-CF/GF", "PA-CF/GF · ABS · ASA · TPU"], "Medium", SUB, CREAM)], HEAD_Y), "top"))
+S.append(("B", stack([(["DU HAST SCHON", "EINE DATEI?"] if V else ["DU HAST SCHON EINE DATEI?"], "Black", HEAD, WHITE),
+                      (["STL · STEP · 3MF", "OBJ · DXF · PDF · BILD"] if V else
+                       ["STL · STEP · 3MF · OBJ · DXF · PDF · BILD"], "Medium", SUB, CREAM),
+                      (["Dateiprüfung: 10 €", "bei Auftrag angerechnet"] if V else
+                       ["Technische Dateiprüfung: 10 €", "Bei Druckauftrag vollständig angerechnet"],
+                       "Bold", SUB - (0 if V else 8), WHITE)], HEAD_Y, gap=20), "top"))
+btn_y = 800 if FMT == "y" else 1275
+kick = text_layer([("JETZT ONLINE ANFRAGEN", font("Bold", KICK), CREAM)], btn_y - 80, tracking=4)
+_bf = fit(["3d-hellprinting.de"], "Black", BTN, maxw=MAXW - 140)
+button = rounded_button("3d-hellprinting.de", _bf, btn_y)
+S.append(("E", stack([(["ICH BIN", "ERICK."] if V else ["ICH BIN ERICK."], "Black", HEAD, WHITE),
+                      (["Du sprichst direkt mit mir.", "Von der Anfrage bis", "zum fertigen Teil."] if V else
+                       ["Du sprichst direkt mit mir.", "Von der Anfrage bis zum fertigen Teil."], "Medium", SUB, CREAM)],
+                     HEAD_Y) + [kick, button], "both"))
 
 label = text_layer([("3D HELLPRINTING AND MORE", font("Bold", LABEL), WHITE)], LABEL_POS[1],
                    align="left", ax=LABEL_POS[0], tracking=3)
